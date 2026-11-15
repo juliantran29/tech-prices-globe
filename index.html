@@ -601,7 +601,29 @@ function initGlobe(){
   fitGlobe();drawGlobe();
   bindGlobeControls();
   window.addEventListener('resize',function(){fitGlobe();drawGlobe();});
-  if(!reduceMotion){setInterval(function(){if(Date.now()-lastInteract>3500&&pointers.size===0&&zoomK<=1.01&&!anim){rotation[0]+=0.12;drawGlobe();}},50);}
+  // Auto-spin: a requestAnimationFrame loop (setInterval is throttled by
+  // browsers and the old zoomK<=1.01 gate disabled spinning for the whole
+  // session after any tap, because every tap zooms to 2.6x). The globe now
+  // turns slowly whenever it has been idle for 2.5s, at ANY zoom level, and
+  // pauses only while the user is dragging / pinching or while a focus/zoom
+  // animation is running — then it resumes on its own.
+  (function(){
+    var lastDraw=0;
+    function spin(t){
+      requestAnimationFrame(spin);
+      if(!lastDraw){lastDraw=t;return;}
+      var dt=t-lastDraw;
+      if(document.hidden)return;
+      if(pointers.size!==0||anim)return;
+      if(Date.now()-lastInteract<2500)return;
+      if(dt<30)return; // redraw at ~30fps: a full border redraw each frame is heavy
+      lastDraw=t;
+      rotation[0]+=Math.min(dt,120)*0.004; // 4 degrees per second, time-based so speed is steady
+      if(rotation[0]>=360)rotation[0]-=360;
+      drawGlobe();
+    }
+    requestAnimationFrame(spin);
+  })();
 }
 var pointers=new Map(),pinch=null,anim=null,dragStart=null;
 function cancelAnim(){if(anim){cancelAnimationFrame(anim.id);anim=null;}}
